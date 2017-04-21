@@ -14,6 +14,7 @@
 
 import json
 import netaddr
+import os
 import posixpath
 import re
 
@@ -24,6 +25,7 @@ import requests
 from cloudbaseinit import conf as cloudbaseinit_conf
 from cloudbaseinit.metadata.services import base
 from cloudbaseinit.utils import x509constants
+from cloudbaseinit.utils import encoding
 
 CONF = cloudbaseinit_conf.CONF
 LOG = oslo_logging.getLogger(__name__)
@@ -112,12 +114,11 @@ class MaaSHttpService(base.BaseHTTPMetadataService):
     def get_user_data(self):
         return self._get_cache_data('%s/user-data' % self._metadata_version)
 
-    def _get_nework_data(self, version='latest'):
-        path = posixpath.normpath(
-            posixpath.join(version, 'network_data.json'))
-        data = self._get_cache_data(path, decode=True)
+    def _get_nework_data(self):
+        data = self._get_file_data("network.json")
+        LOG.debug(data)
         if data:
-            return json.loads(data)
+            return json.loads(encoding.get_as_string(data))
 
     def get_network_details(self):
         network_data = self._get_nework_data()
@@ -176,18 +177,25 @@ class MaaSHttpService(base.BaseHTTPMetadataService):
             if network_config.get('subnets'):
                 for subnet in network_config.get('subnets'):
                     parsed_network = {
+                        'id': None,
+                        'name': None,
                         'mac_address': None,
                         'ip_address': None,
                         'prefix': None,
                         'gateway': None,
-                        'type': None
+                        'type': 'ipv4_dhcp',
+                        'netmask': None,
+                        'meta_type': None
                     }
+                    parsed_network["id"] = network_config.get('name')
+                    parsed_network["name"] = network_config.get('name')
                     parsed_network['mac_address'] = network_config.get('mac_address')
                     parsed_network['gateway'] = subnet.get('gateway')
                     if subnet.get('address'):
                         parsed_network['prefix'] = subnet.get('address').split('/')[1]
+                        parsed_network['netmask'] = str(netaddr.IPNetwork(subnet.get('address')).netmask)
                         parsed_network['ip_address'] = subnet.get('address').split('/')[0]
-                        version = netaddr.IPAddress(subnet.get('address')).version
+                        version = netaddr.IPAddress(parsed_network['ip_address']).version
                         if version == 4:
                             parsed_network['type'] = 'ipv4'
                         elif version == 6:
@@ -204,3 +212,11 @@ class MaaSHttpService(base.BaseHTTPMetadataService):
             if service['type'] == 'nameserver':
                 parsed_dnsses.append(service['address'])
         return {'dns_config': parsed_dnsses}
+
+    def _get_file_data(self, path):
+        norm_path = os.path.normpath(os.path.join("C:\\", path))
+        try:
+            with open(norm_path, 'rb') as stream:
+                return stream.read()
+        except IOError:
+            raise base.NotExistingMetadataException()
