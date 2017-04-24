@@ -775,12 +775,12 @@ class WindowsUtils(base.BaseOSUtils):
         if not len(query):
             raise exception.CloudbaseInitException(
                 "Statically defined network adapters not found")
-
+        conn = wmi.WMI(moniker='//./root/standardcimv2')
         LOG.debug("Setting static DNS namerservers address")
         for adapter_config in query:
-            (ret_val,) = adapter_config.SetDNSServerSearchOrder(dnsnameservers)
-            if ret_val > 1:
-                LOG.debug("Cannot set DNS on network adapter (%d)", ret_val)
+            dns = conn.MSFT_DNSClientServerAddress(InterfaceIndex=adapter_config.InterfaceIndex)
+            for dns1 in dns:
+                dns1.put(operation_options={'custom_options': [{'name':"ServerAddresses", 'value_type':mi.MI_ARRAY | mi.MI_STRING, 'value':dnsnameservers}]})
 
     def set_static_network_config(self, mac_address, address, netmask,
                                   broadcast, gateway, dnsnameservers):
@@ -1683,7 +1683,7 @@ class WindowsUtils(base.BaseOSUtils):
         if phy_link and phy_link.get('mac_address'):
             if phy_link.get('mtu'):
                 self.set_network_adapter_mtu(phy_link.get('mac_address'), phy_link.get('mtu'))
-            if (phy_link.get('name')):
+            if phy_link.get('name'):
                 self.set_network_adapter_name(phy_link.get('mac_address'), phy_link.get('name'))
 
     def _config_vlan_link(self, vlan_link):
