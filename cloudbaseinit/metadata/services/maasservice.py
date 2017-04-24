@@ -210,7 +210,7 @@ class MaaSHttpService(base.BaseHTTPMetadataService):
         parsed_dnsses = []
         for service in network_data['config']:
             if service['type'] == 'nameserver':
-                parsed_dnsses.append(service['address'])
+                parsed_dnsses = service['address']
         return {'dns_config': parsed_dnsses}
 
     def _get_file_data(self, path):

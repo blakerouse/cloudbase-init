@@ -758,12 +758,29 @@ class WindowsUtils(base.BaseOSUtils):
 
         query = conn.query("SELECT * FROM Win32_NetworkAdapter WHERE "
                            "MACAddress = '{}'".format(mac_address))
-        if not len(query) or len(query) not 1:
+        if not len(query) or len(query) is not 1:
             raise exception.CloudbaseInitException(
                 "Network adapter not found")
         LOG.debug("Setting network adapter name")
         query[0].NetConnectionID = name
         query[0].put()
+
+    def set_dns_nameservers(self, dnsnameservers):
+        if not dnsnameservers:
+            return
+        conn = wmi.WMI(moniker='//./root/cimv2')
+
+        query = conn.query("SELECT * FROM Win32_NetworkAdapterConfiguration WHERE "
+                           "DHCPEnabled = FALSE AND IPEnabled = true")
+        if not len(query):
+            raise exception.CloudbaseInitException(
+                "Statically defined network adapters not found")
+
+        LOG.debug("Setting static DNS namerservers address")
+        for adapter_config in query:
+            (ret_val,) = adapter_config.SetDNSServerSearchOrder(dnsnameservers)
+            if ret_val > 1:
+                LOG.debug("Cannot set DNS on network adapter (%d)", ret_val)
 
     def set_static_network_config(self, mac_address, address, netmask,
                                   broadcast, gateway, dnsnameservers):
@@ -1666,7 +1683,7 @@ class WindowsUtils(base.BaseOSUtils):
         if phy_link and phy_link.get('mac_address'):
             if phy_link.get('mtu'):
                 self.set_network_adapter_mtu(phy_link.get('mac_address'), phy_link.get('mtu'))
-            if (phy_link.get('name'))
+            if (phy_link.get('name')):
                 self.set_network_adapter_name(phy_link.get('mac_address'), phy_link.get('name'))
 
     def _config_vlan_link(self, vlan_link):
@@ -1719,4 +1736,4 @@ class WindowsUtils(base.BaseOSUtils):
             Log.debug("IPv6 netmask is not valid")
 
     def _set_dns(self, dns_config):
-        pass
+        self.set_dns_nameservers(dns_config)
