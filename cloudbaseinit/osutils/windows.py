@@ -753,6 +753,18 @@ class WindowsUtils(base.BaseOSUtils):
                     'value "%(mtu)s" failed' % {'mac_address': mac_address,
                                                 'mtu': mtu})
 
+    def set_network_adapter_name(self, mac_address, name):
+        conn = wmi.WMI(moniker='//./root/cimv2')
+
+        query = conn.query("SELECT * FROM Win32_NetworkAdapter WHERE "
+                           "MACAddress = '{}'".format(mac_address))
+        if not len(query) or len(query) not 1:
+            raise exception.CloudbaseInitException(
+                "Network adapter not found")
+        LOG.debug("Setting network adapter name")
+        query[0].NetConnectionID = name
+        query[0].put()
+
     def set_static_network_config(self, mac_address, address, netmask,
                                   broadcast, gateway, dnsnameservers):
         conn = wmi.WMI(moniker='//./root/cimv2')
@@ -1654,8 +1666,8 @@ class WindowsUtils(base.BaseOSUtils):
         if phy_link and phy_link.get('mac_address'):
             if phy_link.get('mtu'):
                 self.set_network_adapter_mtu(phy_link.get('mac_address'), phy_link.get('mtu'))
-            # note(avladu)
-            # Implement link rename
+            if (phy_link.get('name'))
+                self.set_network_adapter_name(phy_link.get('mac_address'), phy_link.get('name'))
 
     def _config_vlan_link(self, vlan_link):
         raise NotImplementedError(
