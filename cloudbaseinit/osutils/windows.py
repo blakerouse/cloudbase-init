@@ -1725,6 +1725,8 @@ class WindowsUtils(base.BaseOSUtils):
             }
         ]
         operation_options = {'custom_options': custom_options}
+        LOG.debug('Trying to configure bond {} with {} mode'.format(team_name,
+                                                                    lbfo_teaming_mode))
         obj.put(operation_options=operation_options)
 
     def _config_network(self, network_info):
