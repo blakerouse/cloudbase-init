@@ -770,17 +770,23 @@ class WindowsUtils(base.BaseOSUtils):
             return
         conn = wmi.WMI(moniker='//./root/cimv2')
 
-        query = conn.query("SELECT * FROM Win32_NetworkAdapterConfiguration WHERE "
-                           "DHCPEnabled = FALSE AND IPEnabled = true")
+        query = conn.query("SELECT * FROM Win32_NetworkAdapterConfiguration"
+                           "WHERE DHCPEnabled = FALSE AND IPEnabled = true")
         if not len(query):
             raise exception.CloudbaseInitException(
                 "Statically defined network adapters not found")
         conn = wmi.WMI(moniker='//./root/standardcimv2')
         LOG.debug("Setting static DNS namerservers address")
         for adapter_config in query:
-            dns = conn.MSFT_DNSClientServerAddress(InterfaceIndex=adapter_config.InterfaceIndex)
-            for dns1 in dns:
-                dns1.put(operation_options={'custom_options': [{'name':"ServerAddresses", 'value_type':mi.MI_ARRAY | mi.MI_STRING, 'value':dnsnameservers}]})
+            dnsEntries = conn.MSFT_DNSClientServerAddress(
+                InterfaceIndex=adapter_config.InterfaceIndex)
+            for dnsEntry in dnsEntries:
+                custom_options = [
+                    {'name': "ServerAddresses",
+                     'value_type': mi.MI_ARRAY | mi.MI_STRING,
+                     'value': dnsnameservers
+                    }]
+                dnsEntry.put(operation_options=custom_options)
 
     def set_static_network_config(self, mac_address, address, netmask,
                                   broadcast, gateway, dnsnameservers):
@@ -1674,27 +1680,29 @@ class WindowsUtils(base.BaseOSUtils):
                 'The L4 configuration info does not exist')
         if network_l4_config.get('dns_config'):
             try:
-                self._set_dns(network_l4_config.get('dns_config'))
+                self.set_dns_nameservers(network_l4_config.get('dns_config'))
             except Exception as exc:
                 LOG.exception(exc)
-
 
     def _config_phy_link(self, phy_link):
         if phy_link and phy_link.get('mac_address'):
             if phy_link.get('mtu'):
-                self.set_network_adapter_mtu(phy_link.get('mac_address'), phy_link.get('mtu'))
+                self.set_network_adapter_mtu(phy_link.get('mac_address'),
+                                             phy_link.get('mtu'))
             if phy_link.get('name'):
-                self.set_network_adapter_name(phy_link.get('mac_address'), phy_link.get('name'))
+                self.set_network_adapter_name(phy_link.get('mac_address'),
+                                              phy_link.get('name'))
 
     def _config_vlan_link(self, vlan_link):
         raise NotImplementedError(
-            "Failed to configure VLAN link. "
+            "Failed to configure VLAN link."
             "Native VLANs are not supported on Windows.")
 
     def _config_bond_link(self, bond_link):
         bond_info = bond_link.get('extra_info').get('bond_info')
         self.new_lbfo_team(team_members=bond_info.get('bond_members'),
-              team_name=bond_link.get('name'), teaming_mode=bond_info.get('bond_mode'))
+                           team_name=bond_link.get('name'),
+                           teaming_mode=bond_info.get('bond_mode'))
         LOG.debug('Bond {} configured'.format(bond_link.get('name')))
 
     def new_lbfo_team(self, team_members, team_name, teaming_mode):
@@ -1712,28 +1720,32 @@ class WindowsUtils(base.BaseOSUtils):
             },
             {'name': 'TeamNicName',
              'value_type': mi.MI_STRING,
-             'value': team_name}
+             'value': team_name
+            }
         ]
         operation_options = {'custom_options': custom_options}
         obj.put(operation_options=operation_options)
 
     def _config_network(self, network_info):
         if network_info.get('type') == 'ipv4':
-            self.set_static_network_config(network_info.get('mac_address'), network_info.get('ip_address'),
-                network_info.get('netmask'), None, network_info.get('gateway'), None)
+            self.set_static_network_config(network_info.get('mac_address'),
+                                           network_info.get('ip_address'),
+                                           network_info.get('netmask'), None,
+                                           network_info.get('gateway'), None)
         elif network_info.get('type') == 'ipv6':
             if not network_info.get('prefix') and network_info.get('netmask'):
-                network_info['prefix'] = self._ipv6_netmask_to_prefix(network_info.get('netmask'))
-            self.set_static_network_config_v6(network_info.get('mac_address'), network_info.get('ip_address'),
-                network_info.get('prefix'), network_info.get('gateway'))
+                network_info['prefix'] = self._ipv6_netmask_to_prefix(
+                    network_info.get('netmask'))
+            self.set_static_network_config_v6(network_info.get('mac_address'),
+                                              network_info.get('ip_address'),
+                                              network_info.get('prefix'),
+                                              network_info.get('gateway'))
         else:
-            LOG.debug("The network is automatically managed by DHCP. No need to set a configuration.")
+            LOG.debug("The network is automatically managed by DHCP."
+                      "No need to set a configuration.")
 
     def _ipv6_netmask_to_prefix(self, netmask):
         if netaddr.IPAddress(netmask).is_netmask():
             return netaddr.IPAddress(netmask).netmask_bits()
         else:
-            Log.debug("IPv6 netmask is not valid")
-
-    def _set_dns(self, dns_config):
-        self.set_dns_nameservers(dns_config)
+            LOG.debug("IPv6 netmask is not valid")

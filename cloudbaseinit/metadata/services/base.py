@@ -59,6 +59,41 @@ AdvancedNetworkDetails = collections.namedtuple(
 )
 
 
+L2NetworkDetails = {
+    'name': None,
+    'type': None,
+    'meta_type': None,
+    'mac_address': None,
+    'mtu': None,
+    'extra_info': {
+        'bond_info': {
+            'bond_members': None,
+            'bond_mode': None
+        },
+        'vlan_info': {
+            'vlan_id': None
+        }
+    }
+}
+
+
+L3NetworkDetails = {
+    'id': None,
+    'name': None,
+    'mac_address': None,
+    'ip_address': None,
+    'prefix': None,
+    'gateway': None,
+    'type': 'ipv4_dhcp',
+    'netmask': None,
+    'meta_type': None
+}
+
+L4NetworkDetails = {
+    'dns_config': []
+}
+
+
 class NotExistingMetadataException(Exception):
     pass
 

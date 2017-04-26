@@ -98,23 +98,21 @@ class BaseOpenStackService(base.BaseMetadataService):
         LOG.debug(network_data)
         network_l2_config = self._parse_l2_network_data(network_data)
         LOG.debug(network_l2_config)
-        network_l3_config = self._parse_l3_network_data(network_data, network_l2_config)
+        network_l3_config = self._parse_l3_network_data(network_data,
+                                                        network_l2_config)
         LOG.debug(network_l3_config)
         network_l4_config = self._parse_l4_network_data(network_data)
         LOG.debug(network_l4_config)
-        return base.AdvancedNetworkDetails(network_l2_config, network_l3_config, network_l4_config)
+        return base.AdvancedNetworkDetails(network_l2_config,
+                                           network_l3_config,
+                                           network_l4_config)
 
     def _parse_l2_network_data(self, network_data):
         if not (network_data and network_data['links']):
             return None
         parsed_links = []
         for link in network_data['links']:
-            parsed_link = {'name':None, 'type':None, 'meta_type':None, 'mac_address':None, 'mtu':None,
-                           'extra_info': {
-                               'bond_info': {'bond_members':None, 'bond_mode': None},
-                               'vlan_info': {'vlan_id': None}
-                            }
-                          }
+            parsed_link = base.L2NetworkDetails.copy()
             if link['id']:
                 parsed_link['name'] = link['id']
 
@@ -136,7 +134,8 @@ class BaseOpenStackService(base.BaseMetadataService):
             if link.get('mtu'):
                 parsed_link['mtu'] = link.get('mtu')
             if link.get('ethernet_mac_address'):
-                parsed_link['mac_address'] = link.get('ethernet_mac_address').upper()
+                parsed_link['mac_address'] = (link.get('ethernet_mac_address')
+                                              .upper())
             parsed_links.append(parsed_link)
         return parsed_links
 
@@ -145,20 +144,23 @@ class BaseOpenStackService(base.BaseMetadataService):
             return None
         parsed_networks = []
         for network in network_data['networks']:
-            parsed_network = {'id': None, 'name': None, 'type': None, 'meta_type':None, 'mac_address':None, 'ip_address': None, 'prefix':None, 'netmask': None, 'gateway':None, 'routes': None}
+            parsed_network = base.L3NetworkDetails().copy()
             if network['network_id']:
                 parsed_network['id'] = network['network_id']
             if network['id']:
                 parsed_network['name'] = network['id']
             if network['type']:
                 parsed_network['meta_type'] = network['type']
-                if network['type'] in ["ipv4", "ipv6", "ipv4_dhcp", "ipv6_dhcp"]:
+                if network['type'] in (["ipv4", "ipv6", "ipv4_dhcp",
+                                       "ipv6_dhcp"]):
                     parsed_network['type'] = network['type']
             if network['link']:
                 parsed_network['link_name'] = network['link']
-                associated_link = [x for x in network_l2_config if x.get('name') == network['link']]
+                associated_link = ([x for x in network_l2_config
+                                   if x.get('name') == network['link']])
                 if associated_link and associated_link[0]['mac_address']:
-                    parsed_network['mac_address'] = associated_link[0]['mac_address']
+                    parsed_network['mac_address'] = (associated_link[0]
+                                                     .get('mac_address'))
             if network.get('ip_address'):
                 ip_address_prefix = network.get('ip_address').split('/')
                 if len(ip_address_prefix) == 2:
@@ -170,7 +172,11 @@ class BaseOpenStackService(base.BaseMetadataService):
                 parsed_network['netmask'] = network.get('netmask')
             if network.get('routes'):
                 parsed_network['routes'] = network.get('routes')
-                route_gateway = [x for x in network['routes'] if (x.get('network') == '0.0.0.0' and x.get('netmask') == '0.0.0.0') or (x.get('network') == '::' and x.get('netmask') == '::')]
+                route_gateway = ([x for x in network['routes']
+                                  if (x.get('network') == '0.0.0.0' and
+                                  x.get('netmask') == '0.0.0.0')
+                                  or (x.get('network') == '::'
+                                  and x.get('netmask') == '::')])
                 if route_gateway and route_gateway[0]['gateway']:
                     parsed_network['gateway'] = route_gateway[0]['gateway']
             parsed_networks.append(parsed_network)
@@ -179,11 +185,11 @@ class BaseOpenStackService(base.BaseMetadataService):
     def _parse_l4_network_data(self, network_data):
         if not (network_data and network_data['services']):
             return None
-        parsed_dnsses = []
+        l4_config = base.L4NetworkDetails.copy()
         for service in network_data['services']:
             if service['type'] == 'dns':
-                parsed_dnsses.append(service['address'])
-        return {'dns_config': parsed_dnsses}
+                l4_config['dns_config'].append(service['address'])
+        return l4_config
 
     def get_admin_password(self):
         meta_data = self._get_meta_data()

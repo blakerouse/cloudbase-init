@@ -15,7 +15,6 @@
 import json
 import netaddr
 import os
-import posixpath
 import re
 
 from oauthlib import oauth1
@@ -24,8 +23,8 @@ import requests
 
 from cloudbaseinit import conf as cloudbaseinit_conf
 from cloudbaseinit.metadata.services import base
-from cloudbaseinit.utils import x509constants
 from cloudbaseinit.utils import encoding
+from cloudbaseinit.utils import x509constants
 
 CONF = cloudbaseinit_conf.CONF
 LOG = oslo_logging.getLogger(__name__)
@@ -133,11 +132,14 @@ class MaaSHttpService(base.BaseHTTPMetadataService):
         LOG.debug(network_data)
         network_l2_config = self._parse_l2_network_data(network_data)
         LOG.debug(network_l2_config)
-        network_l3_config = self._parse_l3_network_data(network_data, network_l2_config)
+        network_l3_config = self._parse_l3_network_data(network_data,
+                                                        network_l2_config)
         LOG.debug(network_l3_config)
         network_l4_config = self._parse_l4_network_data(network_data)
         LOG.debug(network_l4_config)
-        return base.AdvancedNetworkDetails(network_l2_config, network_l3_config, network_l4_config)
+        return base.AdvancedNetworkDetails(network_l2_config,
+                                           network_l3_config,
+                                           network_l4_config)
 
     def _parse_l2_network_data(self, network_data):
         if not network_data:
@@ -146,13 +148,7 @@ class MaaSHttpService(base.BaseHTTPMetadataService):
         for link in network_data['config']:
             if link.get('type') in ['nameserver']:
                 continue
-            parsed_link = {
-                'name': None,
-                'type': None,
-                'meta_type': None,
-                'mac_address': None,
-                'mtu': None
-            }
+            parsed_link = base.L2NetworkDetails.copy()
             if link.get('id'):
                 parsed_link['name'] = link['id']
             if link.get('type'):
@@ -174,44 +170,41 @@ class MaaSHttpService(base.BaseHTTPMetadataService):
             return None
         parsed_networks = []
         for network_config in network_data['config']:
-            if network_config.get('subnets'):
-                for subnet in network_config.get('subnets'):
-                    parsed_network = {
-                        'id': None,
-                        'name': None,
-                        'mac_address': None,
-                        'ip_address': None,
-                        'prefix': None,
-                        'gateway': None,
-                        'type': 'ipv4_dhcp',
-                        'netmask': None,
-                        'meta_type': None
-                    }
-                    parsed_network["id"] = network_config.get('name')
-                    parsed_network["name"] = network_config.get('name')
-                    parsed_network['mac_address'] = network_config.get('mac_address')
-                    parsed_network['gateway'] = subnet.get('gateway')
-                    if subnet.get('address'):
-                        parsed_network['prefix'] = subnet.get('address').split('/')[1]
-                        parsed_network['netmask'] = str(netaddr.IPNetwork(subnet.get('address')).netmask)
-                        parsed_network['ip_address'] = subnet.get('address').split('/')[0]
-                        version = netaddr.IPAddress(parsed_network['ip_address']).version
-                        if version == 4:
-                            parsed_network['type'] = 'ipv4'
-                        elif version == 6:
-                            parsed_network['type'] = 'ipv6'
+            if not network_config.get('subnets'):
+                continue
+            for subnet in network_config.get('subnets'):
+                parsed_network = base.L3NetworkDetails.copy()
+                parsed_network["id"] = network_config.get('name')
+                parsed_network["name"] = network_config.get('name')
+                parsed_network['mac_address'] = (network_config
+                                                 .get('mac_address'))
+                parsed_network['gateway'] = subnet.get('gateway')
+                if subnet.get('address'):
+                    parsed_network['prefix'] = (subnet.get('address')
+                                                .split('/')[1])
+                    parsed_network['netmask'] = (str(netaddr.IPNetwork(subnet
+                                                 .get('address')).netmask))
+                    parsed_network['ip_address'] = (subnet.get('address')
+                                                    .split('/')[0])
+                    version = (netaddr.IPAddress(parsed_network['ip_address'])
+                               .version)
+                    if version == 4:
+                        parsed_network['type'] = 'ipv4'
+                    elif version == 6:
+                        parsed_network['type'] = 'ipv6'
 
-                    parsed_networks.append(parsed_network)
+                parsed_networks.append(parsed_network)
         return parsed_networks
 
     def _parse_l4_network_data(self, network_data):
         if not (network_data and network_data['config']):
             return None
-        parsed_dnsses = []
+        l4_config = base.L4NetworkDetails.copy()
         for service in network_data['config']:
             if service['type'] == 'nameserver':
-                parsed_dnsses = service['address']
-        return {'dns_config': parsed_dnsses}
+                l4_config['dns_config'] = service['address']
+                break
+        return l4_config
 
     def _get_file_data(self, path):
         norm_path = os.path.normpath(os.path.join("C:\\", path))
