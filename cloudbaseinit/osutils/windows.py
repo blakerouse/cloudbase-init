@@ -1709,6 +1709,7 @@ class WindowsUtils(base.BaseOSUtils):
         conn = wmi.WMI(moniker='root/standardcimv2')
         obj = conn.MSFT_NetLbfoTeam.new()
         obj.Name = 'nic_team'
+        lbfo_teaming_mode = network.get_lbfo_teaming_mode(teaming_mode)
         custom_options = [
             {'name': 'TeamMembers',
              'value_type': mi.MI_ARRAY | mi.MI_STRING,
@@ -1716,7 +1717,7 @@ class WindowsUtils(base.BaseOSUtils):
             },
             {'name': 'TeamingMode',
              'value_type': mi.MI_ARRAY | mi.MI_STRING,
-             'value': teaming_mode
+             'value': lbfo_teaming_mode
             },
             {'name': 'TeamNicName',
              'value_type': mi.MI_STRING,
