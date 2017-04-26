@@ -144,7 +144,7 @@ class BaseOpenStackService(base.BaseMetadataService):
             return None
         parsed_networks = []
         for network in network_data['networks']:
-            parsed_network = base.L3NetworkDetails().copy()
+            parsed_network = base.L3NetworkDetails.copy()
             if network['network_id']:
                 parsed_network['id'] = network['network_id']
             if network['id']:

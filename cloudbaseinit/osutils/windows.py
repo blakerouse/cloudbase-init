@@ -770,7 +770,7 @@ class WindowsUtils(base.BaseOSUtils):
             return
         conn = wmi.WMI(moniker='//./root/cimv2')
 
-        query = conn.query("SELECT * FROM Win32_NetworkAdapterConfiguration"
+        query = conn.query("SELECT * FROM Win32_NetworkAdapterConfiguration "
                            "WHERE DHCPEnabled = FALSE AND IPEnabled = true")
         if not len(query):
             raise exception.CloudbaseInitException(
