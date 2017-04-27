@@ -1706,18 +1706,16 @@ class WindowsUtils(base.BaseOSUtils):
         LOG.debug('Bond {} configured'.format(bond_link.get('name')))
 
     def new_lbfo_team(self, team_members, team_name, teaming_mode):
+        lbfo_teaming_mode = network.get_lbfo_teaming_mode(teaming_mode)
         conn = wmi.WMI(moniker='root/standardcimv2')
         obj = conn.MSFT_NetLbfoTeam.new()
-        obj.Name = 'nic_team'
-        lbfo_teaming_mode = network.get_lbfo_teaming_mode(teaming_mode)
+        obj.Name = team_name
+        obj.TeamingMode  = lbfo_teaming_mode
+        obj.LoadBalancingAlgorithm  = 5
         custom_options = [
             {'name': 'TeamMembers',
              'value_type': mi.MI_ARRAY | mi.MI_STRING,
              'value': team_members
-            },
-            {'name': 'TeamingMode',
-             'value_type': mi.MI_ARRAY | mi.MI_STRING,
-             'value': lbfo_teaming_mode
             },
             {'name': 'TeamNicName',
              'value_type': mi.MI_STRING,

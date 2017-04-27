@@ -22,8 +22,8 @@ from cloudbaseinit.utils.windows import iphlpapi
 from cloudbaseinit.utils.windows import kernel32
 from cloudbaseinit.utils.windows import ws2_32
 
-LBFO_BOND_MODE_LACP = "Lacp"
-LBFO_BOND_MODE_SwitchIndependent = "SwitchIndependent"
+LBFO_BOND_MODE_LACP = 2
+LBFO_BOND_MODE_SwitchIndependent = 1
 
 LBFO_BOND_MODES_MAPPING = {
     LBFO_BOND_MODE_LACP: ['lacp', '802.3ad', 4]
