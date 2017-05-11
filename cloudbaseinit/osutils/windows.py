@@ -1716,7 +1716,7 @@ class WindowsUtils(base.BaseOSUtils):
         netLbfoTeam.Name = team_name
         netLbfoTeam.TeamingMode  = lbfo_teaming_mode
         netLbfoTeam.LoadBalancingAlgorithm  = network.LBFO_BOND_ALGORITHM_DYNAMIC
-        primary_network_adapter_name = get_network_adapter(mac_address).NetConnectionID
+        primary_network_adapter_name = self.get_network_adapter(mac_address).NetConnectionID
         team_members.remove(primary_network_adapter_name)
         custom_options = [
             {'name': 'TeamMembers',
