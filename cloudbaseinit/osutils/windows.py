@@ -754,6 +754,11 @@ class WindowsUtils(base.BaseOSUtils):
                                                 'mtu': mtu})
 
     def set_network_adapter_name(self, mac_address, name):
+        network_adapter = self.get_network_adapter(mac_address)
+        network_adapter.NetConnectionID = name
+        network_adapter.put()
+
+    def get_network_adapter(self, mac_address):
         conn = wmi.WMI(moniker='//./root/cimv2')
 
         query = conn.query("SELECT * FROM Win32_NetworkAdapter WHERE "
@@ -761,9 +766,7 @@ class WindowsUtils(base.BaseOSUtils):
         if not len(query) or len(query) is not 1:
             raise exception.CloudbaseInitException(
                 "Network adapter not found")
-        LOG.debug("Setting network adapter name")
-        query[0].NetConnectionID = name
-        query[0].put()
+        return query[0]
 
     def set_dns_nameservers(self, dnsnameservers):
         if not dnsnameservers:
@@ -1700,22 +1703,25 @@ class WindowsUtils(base.BaseOSUtils):
 
     def _config_bond_link(self, bond_link):
         bond_info = bond_link.get('extra_info').get('bond_info')
-        self.new_lbfo_team(team_members=bond_info.get('bond_members'),
+        self.new_lbfo_team(mac_address = bond_link.get('mac_address'),
+                           team_members=bond_info.get('bond_members'),
                            team_name=bond_link.get('name'),
                            teaming_mode=bond_info.get('bond_mode'))
         LOG.debug('Bond {} configured'.format(bond_link.get('name')))
 
-    def new_lbfo_team(self, team_members, team_name, teaming_mode):
+    def new_lbfo_team(self, mac_address, team_members, team_name, teaming_mode):
         lbfo_teaming_mode = network.get_lbfo_teaming_mode(teaming_mode)
         conn = wmi.WMI(moniker='root/standardcimv2')
         netLbfoTeam = conn.MSFT_NetLbfoTeam.new()
         netLbfoTeam.Name = team_name
         netLbfoTeam.TeamingMode  = lbfo_teaming_mode
-        netLbfoTeam.LoadBalancingAlgorithm  = 5
+        netLbfoTeam.LoadBalancingAlgorithm  = network.LBFO_BOND_ALGORITHM_DYNAMIC
+        primary_network_adapter_name = get_network_adapter(mac_address).NetConnectionID
+        team_members.remove(primary_network_adapter_name)
         custom_options = [
             {'name': 'TeamMembers',
              'value_type': mi.MI_ARRAY | mi.MI_STRING,
-             'value': team_members[0]
+             'value': primary_network_adapter_name
             },
             {'name': 'TeamNicName',
              'value_type': mi.MI_STRING,
@@ -1727,7 +1733,7 @@ class WindowsUtils(base.BaseOSUtils):
                                                                     lbfo_teaming_mode))
         netLbfoTeam.put(operation_options=operation_options)
 
-        for team_member in team_members[1:]:
+        for team_member in team_members:
             netLbfoTeamMember = conn.MSFT_NetLbfoTeamMember.new()
             netLbfoTeamMember.Team = team_name
             if lbfo_teaming_mode is network.LBFO_BOND_MODE_SwitchIndependent:
