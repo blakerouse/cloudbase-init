@@ -1708,14 +1708,14 @@ class WindowsUtils(base.BaseOSUtils):
     def new_lbfo_team(self, team_members, team_name, teaming_mode):
         lbfo_teaming_mode = network.get_lbfo_teaming_mode(teaming_mode)
         conn = wmi.WMI(moniker='root/standardcimv2')
-        obj = conn.MSFT_NetLbfoTeam.new()
-        obj.Name = team_name
-        obj.TeamingMode  = lbfo_teaming_mode
-        obj.LoadBalancingAlgorithm  = 5
+        netLbfoTeam = conn.MSFT_NetLbfoTeam.new()
+        netLbfoTeam.Name = team_name
+        netLbfoTeam.TeamingMode  = lbfo_teaming_mode
+        netLbfoTeam.LoadBalancingAlgorithm  = 5
         custom_options = [
             {'name': 'TeamMembers',
              'value_type': mi.MI_ARRAY | mi.MI_STRING,
-             'value': team_members
+             'value': team_members[0]
             },
             {'name': 'TeamNicName',
              'value_type': mi.MI_STRING,
@@ -1725,7 +1725,23 @@ class WindowsUtils(base.BaseOSUtils):
         operation_options = {'custom_options': custom_options}
         LOG.debug('Trying to configure bond {} with {} mode'.format(team_name,
                                                                     lbfo_teaming_mode))
-        obj.put(operation_options=operation_options)
+        netLbfoTeam.put(operation_options=operation_options)
+
+        for team_member in team_members[1:]:
+            netLbfoTeamMember = conn.MSFT_NetLbfoTeamMember.new()
+            netLbfoTeamMember.Team = team_name
+            if lbfo_teaming_mode is network.LBFO_BOND_MODE_SwitchIndependent:
+                netLbfoTeamMember.AdministrativeMode  = network.LBFO_BOND_ADMIN_MODE_STANDBY
+            custom_options = [
+                {'name': 'Name',
+                 'value_type': mi.MI_ARRAY | mi.MI_STRING,
+                 'value': team_member
+                }
+            ]
+            operation_options = {'custom_options': custom_options}
+            LOG.debug('Trying to add bond member {} with {} mode'.format(team_member,
+                                                                        False))
+            netLbfoTeamMember.put(operation_options=operation_options)
 
     def _config_network(self, network_info):
         if network_info.get('type') == 'ipv4':

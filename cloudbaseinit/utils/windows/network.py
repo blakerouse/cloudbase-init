@@ -24,6 +24,8 @@ from cloudbaseinit.utils.windows import ws2_32
 
 LBFO_BOND_MODE_LACP = 2
 LBFO_BOND_MODE_SwitchIndependent = 1
+LBFO_BOND_ADMIN_MODE_ACTIVE = 0
+LBFO_BOND_ADMIN_MODE_STANDBY = 1
 
 LBFO_BOND_MODES_MAPPING = {
     LBFO_BOND_MODE_LACP: ['lacp', '802.3ad', 4]
