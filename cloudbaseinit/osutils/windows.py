@@ -754,19 +754,9 @@ class WindowsUtils(base.BaseOSUtils):
                                                 'mtu': mtu})
 
     def set_network_adapter_name(self, mac_address, name):
-        network_adapter = self.get_network_adapter(mac_address)
+        network_adapter = self._get_network_adapter(mac_address)
         network_adapter.NetConnectionID = name
         network_adapter.put()
-
-    def get_network_adapter(self, mac_address):
-        conn = wmi.WMI(moniker='//./root/cimv2')
-
-        query = conn.query("SELECT * FROM Win32_NetworkAdapter WHERE "
-                           "MACAddress = '{}'".format(mac_address))
-        if not len(query) or len(query) is not 1:
-            raise exception.CloudbaseInitException(
-                "Network adapter not found")
-        return query[0]
 
     def set_dns_nameservers(self, dnsnameservers):
         if not dnsnameservers:
@@ -792,17 +782,26 @@ class WindowsUtils(base.BaseOSUtils):
                 operation_options = {'custom_options': custom_options}
                 dnsEntry.put(operation_options=operation_options)
 
-    def set_static_network_config(self, mac_address, address, netmask,
-                                  broadcast, gateway, dnsnameservers):
+    def _get_network_adapter(self, mac_address, adapter_name=None):
         conn = wmi.WMI(moniker='//./root/cimv2')
 
-        query = conn.query("SELECT * FROM Win32_NetworkAdapter WHERE "
-                           "MACAddress = '{}'".format(mac_address))
+        query = "SELECT * FROM Win32_NetworkAdapter WHERE MACAddress = '{}'".format(mac_address)
+        if adapter_name:
+            query = (query + " AND NeTConnectionId = '{}'").format(adapter_name)
+        adapter = conn.query(query)
         if not len(query):
             raise exception.CloudbaseInitException(
                 "Network adapter not found")
+        if len(adapter) > 1:
+            raise exception.CloudbaseInitException(
+                "Multiple adapters found with the same MAC")
+        return adapter[0]
 
-        adapter_config = query[0].associators(
+    def set_static_network_config(self, mac_address, address, netmask,
+                                  broadcast, gateway, dnsnameservers,
+                                  adapter_name=None):
+        adapter = self._get_network_adapter(mac_address, adapter_name)
+        adapter_config = adapter.associators(
             wmi_result_class='Win32_NetworkAdapterConfiguration')[0]
 
         LOG.debug("Setting static IP address")
@@ -834,19 +833,11 @@ class WindowsUtils(base.BaseOSUtils):
         return reboot_required
 
     def set_static_network_config_v6(self, mac_address, address6,
-                                     netmask6, gateway6):
+                                     netmask6, gateway6, adapter_name=None):
         """Set IPv6 info for a network card."""
-
-        # Get local properties by MAC identification.
-        adapters = network.get_adapter_addresses()
-        for adapter in adapters:
-            if mac_address == adapter["mac_address"]:
-                ifname = adapter["friendly_name"]
-                ifindex = adapter["interface_index"]
-                break
-        else:
-            raise exception.CloudbaseInitException(
-                "Adapter with MAC {!r} not available".format(mac_address))
+        adapter = self._get_network_adapter(mac_address, adapter_name)
+        ifname = adapter.NetConnectionID
+        ifindex = adapter.InterfaceIndex
 
         # TODO(cpoieana): Extend support for other platforms.
         #                 Currently windows8 @ ws2012 or above.
@@ -1716,8 +1707,8 @@ class WindowsUtils(base.BaseOSUtils):
         netLbfoTeam = conn.MSFT_NetLbfoTeam.new()
         netLbfoTeam.Name = team_name
         netLbfoTeam.TeamingMode  = lbfo_teaming_mode
-        netLbfoTeam.LoadBalancingAlgorithm  = network.LBFO_BOND_ALGORITHM_DYNAMIC
-        primary_network_adapter_name = self.get_network_adapter(mac_address).NetConnectionID
+        netLbfoTeam.LoadBalancingAlgorithm  = network.LBFO_BOND_ALGORITHM_L2_L3
+        primary_network_adapter_name = self._get_network_adapter(mac_address).NetConnectionID
         team_members.remove(primary_network_adapter_name)
         custom_options = [
             {'name': 'TeamMembers',
@@ -1755,7 +1746,8 @@ class WindowsUtils(base.BaseOSUtils):
             self.set_static_network_config(network_info.get('mac_address'),
                                            network_info.get('ip_address'),
                                            network_info.get('netmask'), None,
-                                           network_info.get('gateway'), None)
+                                           network_info.get('gateway'), None,
+                                           network_info.get('link_name'))
         elif network_info.get('type') == 'ipv6':
             if not network_info.get('prefix') and network_info.get('netmask'):
                 network_info['prefix'] = self._ipv6_netmask_to_prefix(
@@ -1763,7 +1755,8 @@ class WindowsUtils(base.BaseOSUtils):
             self.set_static_network_config_v6(network_info.get('mac_address'),
                                               network_info.get('ip_address'),
                                               network_info.get('prefix'),
-                                              network_info.get('gateway'))
+                                              network_info.get('gateway'),
+                                              network_info.get('link_name'))
         else:
             LOG.debug("The network is automatically managed by DHCP."
                       "No need to set a configuration.")
