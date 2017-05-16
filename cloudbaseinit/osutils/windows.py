@@ -789,7 +789,8 @@ class WindowsUtils(base.BaseOSUtils):
                      'value_type': mi.MI_ARRAY | mi.MI_STRING,
                      'value': dnsnameservers
                     }]
-                dnsEntry.put(operation_options=custom_options)
+                operation_options = {'custom_options': custom_options}
+                dnsEntry.put(operation_options=operation_options)
 
     def set_static_network_config(self, mac_address, address, netmask,
                                   broadcast, gateway, dnsnameservers):
