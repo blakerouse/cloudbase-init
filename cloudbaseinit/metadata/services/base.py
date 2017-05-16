@@ -80,6 +80,7 @@ L2NetworkDetails = {
 L3NetworkDetails = {
     'id': None,
     'name': None,
+    'link_name': None,
     'mac_address': None,
     'ip_address': None,
     'prefix': None,

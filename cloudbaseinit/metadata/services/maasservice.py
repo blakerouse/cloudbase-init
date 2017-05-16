@@ -176,6 +176,7 @@ class MaaSHttpService(base.BaseHTTPMetadataService):
                 parsed_network = base.L3NetworkDetails.copy()
                 parsed_network["id"] = network_config.get('name')
                 parsed_network["name"] = network_config.get('name')
+                parsed_network["link_name"] = network_config.get('name')
                 parsed_network['mac_address'] = (network_config
                                                  .get('mac_address'))
                 parsed_network['gateway'] = subnet.get('gateway')
