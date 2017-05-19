@@ -762,9 +762,8 @@ class WindowsUtils(base.BaseOSUtils):
         if not dnsnameservers:
             return
         conn = wmi.WMI(moniker='//./root/cimv2')
-
         query = conn.query("SELECT * FROM Win32_NetworkAdapterConfiguration "
-                           "WHERE DHCPEnabled = FALSE AND IPEnabled = true")
+	                    "WHERE MACADDRESS IS NOT NULL AND IPenabled = true")
         if not len(query):
             raise exception.CloudbaseInitException(
                 "Statically defined network adapters not found")
@@ -1728,8 +1727,6 @@ class WindowsUtils(base.BaseOSUtils):
         for team_member in team_members:
             netLbfoTeamMember = conn.MSFT_NetLbfoTeamMember.new()
             netLbfoTeamMember.Team = team_name
-            if lbfo_teaming_mode is network.LBFO_BOND_MODE_SwitchIndependent:
-                netLbfoTeamMember.AdministrativeMode  = network.LBFO_BOND_ADMIN_MODE_STANDBY
             custom_options = [
                 {'name': 'Name',
                  'value_type': mi.MI_STRING,
@@ -1740,6 +1737,7 @@ class WindowsUtils(base.BaseOSUtils):
             LOG.debug('Trying to add bond member {} with {} mode'.format(team_member,
                                                                         False))
             netLbfoTeamMember.put(operation_options=operation_options)
+            time.sleep(10)
 
     def _config_network(self, network_info):
         if network_info.get('type') == 'ipv4':

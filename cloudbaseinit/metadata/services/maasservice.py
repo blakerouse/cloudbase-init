@@ -156,8 +156,12 @@ class MaaSHttpService(base.BaseHTTPMetadataService):
                 parsed_link['type'] = 'phy'
                 if link['type'] in ['ovs', 'vif']:
                     parsed_link['type'] = 'phy'
-                elif link['type'] in ['phy', 'bond', 'vlan']:
+                elif link['type'] in ['vlan']:
                     parsed_link['type'] = link['type']
+                elif link['type'] == 'bond':
+                    parsed_link['type'] = link['type']
+                    parsed_link['extra_info']['bond_info']['bond_members'] = link['bond_interfaces']
+                    parsed_link['extra_info']['bond_info']['bond_mode'] = link['params']['bond-mode']
             if link.get('mtu'):
                 parsed_link['mtu'] = link['mtu']
             if link.get('mac_address'):
