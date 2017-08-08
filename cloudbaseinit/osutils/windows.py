@@ -40,6 +40,7 @@ import wmi
 
 from cloudbaseinit import exception
 from cloudbaseinit.osutils import base
+from cloudbaseinit.utils.retry import retry
 from cloudbaseinit.utils.windows import disk
 from cloudbaseinit.utils.windows import network
 from cloudbaseinit.utils.windows import privilege
@@ -758,6 +759,7 @@ class WindowsUtils(base.BaseOSUtils):
         network_adapter.NetConnectionID = name
         network_adapter.put()
 
+    @retry(5)
     def set_dns_nameservers(self, dnsnameservers):
         if not dnsnameservers:
             return
@@ -1678,6 +1680,7 @@ class WindowsUtils(base.BaseOSUtils):
             except Exception as exc:
                 LOG.exception(exc)
 
+    @retry(5)
     def _config_phy_link(self, phy_link):
         if phy_link and phy_link.get('mac_address'):
             if phy_link.get('mtu'):
@@ -1687,11 +1690,13 @@ class WindowsUtils(base.BaseOSUtils):
                 self.set_network_adapter_name(phy_link.get('mac_address'),
                                               phy_link.get('name'))
 
+    @retry(5)
     def _config_vlan_link(self, vlan_link):
         raise NotImplementedError(
             "Failed to configure VLAN link."
             "Native VLANs are not supported on Windows.")
 
+    @retry(5)
     def _config_bond_link(self, bond_link):
         bond_info = bond_link.get('extra_info').get('bond_info')
         self.new_lbfo_team(mac_address = bond_link.get('mac_address'),
@@ -1739,6 +1744,7 @@ class WindowsUtils(base.BaseOSUtils):
             netLbfoTeamMember.put(operation_options=operation_options)
             time.sleep(10)
 
+    @retry(5)
     def _config_network(self, network_info):
         if network_info.get('type') == 'ipv4':
             self.set_static_network_config(network_info.get('mac_address'),
