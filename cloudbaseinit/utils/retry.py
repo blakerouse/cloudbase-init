@@ -32,13 +32,12 @@ def retry(tries, try_delay=1):
     def wrap_retry(f):
         def _wrap_retry(*args, **kwargs):
             ftries, fdelay = tries, try_delay
-            while tries > 0:
+            while ftries > 0:
                 try:
                     return f(*args, **kwargs)
                 except Exception:
-                    if tries == 1:
-                        raise
-                else:
+                    if ftries == 1:
+                        raise                    
                     time.sleep(fdelay)
                     ftries -= 1
         return _wrap_retry

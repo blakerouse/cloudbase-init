@@ -1699,7 +1699,7 @@ class WindowsUtils(base.BaseOSUtils):
     @retry(5)
     def _config_bond_link(self, bond_link):
         bond_info = bond_link.get('extra_info').get('bond_info')
-        self.new_lbfo_team(mac_address = bond_link.get('mac_address'),
+        self.new_lbfo_team(mac_address=bond_link.get('mac_address'),
                            team_members=bond_info.get('bond_members'),
                            team_name=bond_link.get('name'),
                            teaming_mode=bond_info.get('bond_mode'))
