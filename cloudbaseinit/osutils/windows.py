@@ -783,19 +783,31 @@ class WindowsUtils(base.BaseOSUtils):
                 operation_options = {'custom_options': custom_options}
                 dnsEntry.put(operation_options=operation_options)
 
-    def _get_network_adapter(self, mac_address, adapter_name=None):
-        conn = wmi.WMI(moniker='//./root/cimv2')
+    def _get_network_adapter(self, mac_address=None, adapter_name=None):
+        if not mac_address and not adapter_name:
+            raise ValueError('Either mac_address or adapter_name must be provided.')
 
-        query = "SELECT * FROM Win32_NetworkAdapter WHERE MACAddress = '{}'".format(mac_address)
+        conn = wmi.WMI(moniker='//./root/cimv2')
+        query = "SELECT * FROM Win32_NetworkAdapter WHERE "
+        if mac_address:
+            query = (query + "MACAddress = '{}'").format(mac_address)
         if adapter_name:
-            query = (query + " AND NeTConnectionId = '{}'").format(adapter_name)
+            query = (query + "{} NeTConnectionId = '{}'").format(
+                " AND" if mac_address else "", adapter_name)
         adapter = conn.query(query)
         if not len(query):
             raise exception.CloudbaseInitException(
                 "Network adapter not found")
         if len(adapter) > 1:
-            raise exception.CloudbaseInitException(
-                "Multiple adapters found with the same MAC")
+            # Filter out any adapters that are in the NetLbfo subsystem.
+            adapter = [
+                iface
+                for iface in adapter
+                if iface.ServiceName != 'NdisImPlatformMp'
+            ]
+            if len(adapter) > 1:
+                raise exception.CloudbaseInitException(
+                    "Multiple adapters found with the same MAC")
         return adapter[0]
 
     def set_static_network_config(self, mac_address, address, netmask,
@@ -1649,14 +1661,14 @@ class WindowsUtils(base.BaseOSUtils):
                 self._config_phy_link(phy_link)
             except Exception as exc:
                 LOG.exception(exc)
-        for vlan_link in vlan_links:
-            try:
-                self._config_vlan_link(vlan_link)
-            except Exception as exc:
-                LOG.exception(exc)
         for bond_link in bond_links:
             try:
                 self._config_bond_link(bond_link)
+            except Exception as exc:
+                LOG.exception(exc)
+        for vlan_link in vlan_links:
+            try:
+                self._config_vlan_link(vlan_link)
             except Exception as exc:
                 LOG.exception(exc)
 
@@ -1692,28 +1704,75 @@ class WindowsUtils(base.BaseOSUtils):
 
     @retry(5)
     def _config_vlan_link(self, vlan_link):
-        raise NotImplementedError(
-            "Failed to configure VLAN link."
-            "Native VLANs are not supported on Windows.")
+        link_name = vlan_link.get('extra_info').get('vlan_info').get('vlan_link')
+        vlan_id = vlan_link.get('extra_info').get('vlan_info').get('vlan_id')
+        # Check if a lbfo already exists for that name.
+        conn = wmi.WMI(moniker='root/standardcimv2')
+        lbfo_teams = conn.MSFT_NetLbfoTeam()
+        lbfo_team = None
+        for lbfo_team_i in lbfo_teams:
+            if lbfo_team_i.Name == link_name:
+                lbfo_team = lbfo_team_i
+                break
+
+        if lbfo_team is None:
+            # No lbfo team for the parent link. Create one so the VLAN can be added.
+            network_adapter = self._get_network_adapter(adapter_name=link_name)
+            lbfo_team = self.new_lbfo_team(
+                conn, mac_address=network_adapter.MACAddress, team_members=[link_name],
+                team_name=link_name, teaming_mode=None, nic_name="{}-untagged".format(link_name))
+        else:
+            LOG.debug('VLAN parent bond {} already existed'.format(link_name))
+
+        # Check if the VLAN inferface already exists on the lbfo.
+        lbfo_team_nics = conn.MSFT_NetLbfoTeamNic()
+        team_nic = None
+        for team_nic_i in lbfo_team_nics:
+            if team_nic_i.Team == link_name and team_nic_i.VlanID == vlan_id:
+                team_nic = team_nic_i
+                break
+
+        if team_nic is None:
+            # No vlan interface on the lbfo team. Create the VLAN interface.
+            team_nic = conn.MSFT_NetLbfoTeamNic.new()
+            team_nic.Name = vlan_link.get('name')
+            team_nic.Team = lbfo_team.Name
+            team_nic.VlanId = vlan_id
+            LOG.debug('Trying to configure VLAN {}'.format(vlan_link.get('name')))
+            team_nic.put()
+        LOG.debug('VLAN {} configured'.format(vlan_link.get('name')))
 
     @retry(5)
     def _config_bond_link(self, bond_link):
+        bond_name = bond_link.get('name')
         bond_info = bond_link.get('extra_info').get('bond_info')
-        self.new_lbfo_team(mac_address=bond_link.get('mac_address'),
-                           team_members=bond_info.get('bond_members'),
-                           team_name=bond_link.get('name'),
-                           teaming_mode=bond_info.get('bond_mode'))
-        LOG.debug('Bond {} configured'.format(bond_link.get('name')))
-
-    def new_lbfo_team(self, mac_address, team_members, team_name, teaming_mode):
-        lbfo_teaming_mode = network.get_lbfo_teaming_mode(teaming_mode)
+        # Check if a lbfo already exists for that name.
         conn = wmi.WMI(moniker='root/standardcimv2')
+        lbfo_teams = conn.MSFT_NetLbfoTeam()
+        lbfo_team = None
+        for lbfo_team_i in lbfo_teams:
+            if lbfo_team_i.Name == bond_name:
+                lbfo_team = lbfo_team_i
+                break
+    
+        if lbfo_team is None:
+            # No bond with that name. Create the bond first.
+            lbfo_team = self.new_lbfo_team(
+                conn, mac_address=bond_link.get('mac_address'), team_members=bond_info.get('bond_members'),
+                team_name=bond_name, teaming_mode=bond_info.get('bond_mode'))
+        LOG.debug('Bond {} configured'.format(bond_name))
+
+    def new_lbfo_team(self, conn, mac_address, team_members, team_name, teaming_mode, nic_name=None):
+        lbfo_teaming_mode = network.get_lbfo_teaming_mode(teaming_mode)
         netLbfoTeam = conn.MSFT_NetLbfoTeam.new()
         netLbfoTeam.Name = team_name
         netLbfoTeam.TeamingMode  = lbfo_teaming_mode
         netLbfoTeam.LoadBalancingAlgorithm  = network.LBFO_BOND_ALGORITHM_L2_L3
         primary_network_adapter_name = self._get_network_adapter(mac_address).NetConnectionID
         team_members.remove(primary_network_adapter_name)
+        team_nic_name = team_name
+        if nic_name:
+            team_nic_name = nic_name
         custom_options = [
             {'name': 'TeamMembers',
              'value_type': mi.MI_ARRAY | mi.MI_STRING,
@@ -1721,7 +1780,7 @@ class WindowsUtils(base.BaseOSUtils):
             },
             {'name': 'TeamNicName',
              'value_type': mi.MI_STRING,
-             'value': team_name
+             'value': team_nic_name
             }
         ]
         operation_options = {'custom_options': custom_options}
@@ -1743,6 +1802,7 @@ class WindowsUtils(base.BaseOSUtils):
                                                                         False))
             netLbfoTeamMember.put(operation_options=operation_options)
             time.sleep(10)
+        return netLbfoTeam
 
     @retry(5)
     def _config_network(self, network_info):

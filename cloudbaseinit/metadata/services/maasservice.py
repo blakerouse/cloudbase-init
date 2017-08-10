@@ -158,6 +158,8 @@ class MaaSHttpService(base.BaseHTTPMetadataService):
                     parsed_link['type'] = 'phy'
                 elif link['type'] in ['vlan']:
                     parsed_link['type'] = link['type']
+                    parsed_link['extra_info']['vlan_info']['vlan_link'] = link['vlan_link']
+                    parsed_link['extra_info']['vlan_info']['vlan_id'] = link['vlan_id']
                 elif link['type'] == 'bond':
                     parsed_link['type'] = link['type']
                     parsed_link['extra_info']['bond_info']['bond_members'] = link['bond_interfaces']
