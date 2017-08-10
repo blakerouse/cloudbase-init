@@ -756,8 +756,11 @@ class WindowsUtils(base.BaseOSUtils):
 
     def set_network_adapter_name(self, mac_address, name):
         network_adapter = self._get_network_adapter(mac_address)
-        network_adapter.NetConnectionID = name
-        network_adapter.put()
+        if network_adapter.NetConnectionID != name:
+            LOG.debug("Renaming network adapter '{}' to '{}".format(
+                network_adapter.NetConnectionID, name))
+            network_adapter.NetConnectionID = name
+            network_adapter.put()
 
     @retry(5)
     def set_dns_nameservers(self, dnsnameservers):
@@ -792,12 +795,17 @@ class WindowsUtils(base.BaseOSUtils):
         if mac_address:
             query = (query + "MACAddress = '{}'").format(mac_address)
         if adapter_name:
-            query = (query + "{} NeTConnectionId = '{}'").format(
+            query = (query + "{} NetConnectionId = '{}'").format(
                 " AND" if mac_address else "", adapter_name)
         adapter = conn.query(query)
-        if not len(query):
+        if not len(adapter):
+            params = ""
+            if mac_address:
+                params += "mac_address={}".format(mac_address)
+            if adapter_name:
+                params += " adapter_name={}".format(adapter_name)
             raise exception.CloudbaseInitException(
-                "Network adapter not found")
+                "Network adapter not found: {}".format(params))
         if len(adapter) > 1:
             # Filter out any adapters that are in the NetLbfo subsystem.
             adapter = [
