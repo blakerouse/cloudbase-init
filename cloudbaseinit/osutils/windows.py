@@ -757,7 +757,7 @@ class WindowsUtils(base.BaseOSUtils):
     def set_network_adapter_name(self, mac_address, name):
         network_adapter = self._get_network_adapter(mac_address)
         if network_adapter.NetConnectionID != name:
-            LOG.debug("Renaming network adapter '{}' to '{}".format(
+            LOG.debug("Renaming network adapter '{}' to '{}'".format(
                 network_adapter.NetConnectionID, name))
             network_adapter.NetConnectionID = name
             network_adapter.put()
