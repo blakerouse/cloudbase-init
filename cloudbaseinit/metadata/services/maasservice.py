@@ -12,6 +12,7 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+import copy
 import json
 import netaddr
 import os
@@ -132,8 +133,7 @@ class MaaSHttpService(base.BaseHTTPMetadataService):
         LOG.debug(network_data)
         network_l2_config = self._parse_l2_network_data(network_data)
         LOG.debug(network_l2_config)
-        network_l3_config = self._parse_l3_network_data(network_data,
-                                                        network_l2_config)
+        network_l3_config = self._parse_l3_network_data(network_data)
         LOG.debug(network_l3_config)
         network_l4_config = self._parse_l4_network_data(network_data)
         LOG.debug(network_l4_config)
@@ -148,7 +148,7 @@ class MaaSHttpService(base.BaseHTTPMetadataService):
         for link in network_data['config']:
             if link.get('type') in ['nameserver']:
                 continue
-            parsed_link = base.L2NetworkDetails.copy()
+            parsed_link = copy.deepcopy(base.L2NetworkDetails)
             if link.get('id'):
                 parsed_link['name'] = link['id']
             if link.get('type'):
@@ -171,7 +171,7 @@ class MaaSHttpService(base.BaseHTTPMetadataService):
             parsed_links.append(parsed_link)
         return parsed_links
 
-    def _parse_l3_network_data(self, network_data, network_l2_config):
+    def _parse_l3_network_data(self, network_data):
         if not (network_data and network_data['config']):
             return None
         parsed_networks = []
@@ -179,7 +179,7 @@ class MaaSHttpService(base.BaseHTTPMetadataService):
             if not network_config.get('subnets'):
                 continue
             for subnet in network_config.get('subnets'):
-                parsed_network = base.L3NetworkDetails.copy()
+                parsed_network = copy.deepcopy(base.L3NetworkDetails)
                 parsed_network["id"] = network_config.get('name')
                 parsed_network["name"] = network_config.get('name')
                 parsed_network["link_name"] = network_config.get('name')
@@ -206,7 +206,7 @@ class MaaSHttpService(base.BaseHTTPMetadataService):
     def _parse_l4_network_data(self, network_data):
         if not (network_data and network_data['config']):
             return None
-        l4_config = base.L4NetworkDetails.copy()
+        l4_config = copy.deepcopy(base.L4NetworkDetails)
         for service in network_data['config']:
             if service['type'] == 'nameserver':
                 l4_config['dns_config'] = service['address']

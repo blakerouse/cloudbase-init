@@ -821,25 +821,36 @@ class WindowsUtils(base.BaseOSUtils):
     def set_static_network_config(self, mac_address, address, netmask,
                                   broadcast, gateway, dnsnameservers,
                                   adapter_name=None):
-        adapter = self._get_network_adapter(mac_address, adapter_name)
+        # Possible that this adapter was using in a tagged VLAN
+        # configuration. The untagged NIC is suffixed with '-untagged'
+        # so we try to match on that first.
+        try:
+            adapter = self._get_network_adapter(
+                mac_address, '{}-untagged'.format(adapter_name))
+        except exception.CloudbaseInitException:
+            adapter = self._get_network_adapter(mac_address, adapter_name)
+        adapter_name = adapter.NetConnectionID
         adapter_config = adapter.associators(
             wmi_result_class='Win32_NetworkAdapterConfiguration')[0]
 
-        LOG.debug("Setting static IP address")
+        params = "mac_address={}".format(mac_address)
+        if adapter_name:
+            params += " adapter_name={}".format(adapter_name)
+        LOG.debug("Setting static IP address {}: {}".format(address, params))
         (ret_val,) = adapter_config.EnableStatic([address], [netmask])
         if ret_val > 1:
             raise exception.CloudbaseInitException(
-                "Cannot set static IP address on network adapter (%d)",
-                ret_val)
+                "Cannot set static IP address on network "
+                "adapter: {} exit_code={}".format(params, ret_val))
         reboot_required = (ret_val == 1)
 
         if gateway:
-            LOG.debug("Setting static gateways")
+            LOG.debug("Setting static gateway {}: {}".format(gateway, params))
             (ret_val,) = adapter_config.SetGateways([gateway], [1])
             if ret_val > 1:
                 raise exception.CloudbaseInitException(
-                    "Cannot set gateway on network adapter (%d)",
-                    ret_val)
+                    "Cannot set gateway on network adapter: "
+                    "{} exit_code={}".format(params, ret_val))
             reboot_required = reboot_required or ret_val == 1
 
         if dnsnameservers:
@@ -856,7 +867,14 @@ class WindowsUtils(base.BaseOSUtils):
     def set_static_network_config_v6(self, mac_address, address6,
                                      netmask6, gateway6, adapter_name=None):
         """Set IPv6 info for a network card."""
-        adapter = self._get_network_adapter(mac_address, adapter_name)
+        # Possible that this adapter was using in a tagged VLAN
+        # configuration. The untagged NIC is suffixed with '-untagged'
+        # so we try to match on that first.
+        try:
+            adapter = self._get_network_adapter(
+                mac_address, '{}-untagged'.format(adapter_name))
+        except exception.CloudbaseInitException:
+            adapter = self._get_network_adapter(mac_address, adapter_name)
         ifname = adapter.NetConnectionID
         ifindex = adapter.InterfaceIndex
 
